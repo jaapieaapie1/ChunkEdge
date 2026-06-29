@@ -1,6 +1,6 @@
 use crate::layer::chunk::UnloadedChunk;
 use crate::protocol::packets::play::{AddEntityS2c, PlayerInfoUpdateS2c};
-use crate::testing::{create_mock_client, ScenarioSingleClient};
+use crate::testing::{create_mock_client, spawn_client_in_layer, ScenarioSingleClient};
 use crate::ChunkLayer;
 
 #[test]
@@ -33,12 +33,8 @@ fn player_list_arrives_before_player_spawn() {
         assert_eq!(pkt.entries.len(), 1)
     };
 
-    let (mut client_2, mut client_helper_2) = create_mock_client("test_2");
-    client_2.layer.0 = layer_ent;
-    client_2.visible_chunk_layer.0 = layer_ent;
-    client_2.visible_entity_layers.0.insert(layer_ent);
-
-    app.world_mut().spawn(client_2);
+    let (client_2, mut client_helper_2) = create_mock_client("test_2");
+    spawn_client_in_layer(app.world_mut(), client_2, layer_ent);
 
     app.update();
 

@@ -1,7 +1,8 @@
 use std::time::Duration;
 
 use bevy_app::prelude::*;
-use chunkedge::entity::Position;
+use chunkedge::client::{ViewDistance, VisibleChunkLayer, VisibleEntityLayers};
+use chunkedge::entity::{EntityLayerId, Position};
 use chunkedge::keepalive::KeepaliveSettings;
 use chunkedge::layer::chunk::UnloadedChunk;
 use chunkedge::layer::LayerBundle;
@@ -64,12 +65,7 @@ fn run_many_players(bencher: Bencher, client_count: usize, view_dist: u8, world_
 
     // Spawn a bunch of clients in at random initial positions in the instance.
     for i in 0..client_count {
-        let (mut bundle, helper) = create_mock_client(format!("client_{i}"));
-
-        bundle.visible_chunk_layer.0 = layer;
-        bundle.visible_entity_layers.0.insert(layer);
-        bundle.layer.0 = layer;
-        bundle.view_distance.set(view_dist);
+        let (bundle, helper) = create_mock_client(format!("client_{i}"));
 
         let mut rng = rand::rng();
         let x = rng.random_range(-f64::from(world_size) * 16.0..=f64::from(world_size) * 16.0);
@@ -79,6 +75,16 @@ fn run_many_players(bencher: Bencher, client_count: usize, view_dist: u8, world_
             .world_mut()
             .spawn((bundle, Position::new(DVec3::new(x, 64.0, z))))
             .id();
+
+        let mut entity = app.world_mut().entity_mut(id);
+        entity.get_mut::<VisibleChunkLayer>().unwrap().0 = layer;
+        entity
+            .get_mut::<VisibleEntityLayers>()
+            .unwrap()
+            .0
+            .insert(layer);
+        entity.get_mut::<EntityLayerId>().unwrap().0 = layer;
+        entity.get_mut::<ViewDistance>().unwrap().set(view_dist);
 
         clients.push((id, helper));
     }

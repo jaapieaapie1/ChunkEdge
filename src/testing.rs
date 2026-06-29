@@ -10,7 +10,10 @@ use chunkedge_binary::{Decode, Encode};
 use chunkedge_ident::ident;
 use chunkedge_network::NetworkPlugin;
 use chunkedge_registry::{BiomeRegistry, DimensionTypeRegistry};
-use chunkedge_server::client::{ClientBundle, ClientBundleArgs, ClientConnection, ReceivedPacket};
+use chunkedge_server::client::{
+    ClientArgs, ClientConnection, ReceivedPacket, VisibleChunkLayer, VisibleEntityLayers,
+};
+use chunkedge_server::entity::EntityLayerId;
 use chunkedge_server::keepalive::KeepaliveSettings;
 use chunkedge_server::protocol::decode::PacketFrame;
 use chunkedge_server::protocol::packets::play::{AcceptTeleportationC2s, PlayerPositionS2c};
@@ -58,11 +61,8 @@ impl ScenarioSingleClient {
         let entity_layer = EntityLayer::new(app.world().resource::<Server>());
         let layer = app.world_mut().spawn((chunk_layer, entity_layer)).id();
 
-        let (mut client, helper) = create_mock_client("test");
-        client.layer.0 = layer;
-        client.visible_chunk_layer.0 = layer;
-        client.visible_entity_layers.0.insert(layer);
-        let client = app.world_mut().spawn(client).id();
+        let (bundle, helper) = create_mock_client("test");
+        let client = spawn_client_in_layer(app.world_mut(), bundle, layer);
 
         ScenarioSingleClient {
             app,
@@ -79,14 +79,32 @@ impl Default for ScenarioSingleClient {
     }
 }
 
+/// Spawns a mock client `bundle` and places it within `layer` by overriding the
+/// relevant layer/visibility components (which otherwise default via [`Client`]'s
+/// required components). Returns the spawned client entity.
+///
+/// [`Client`]: chunkedge_server::client::Client
+pub fn spawn_client_in_layer<B: Bundle>(world: &mut World, bundle: B, layer: Entity) -> Entity {
+    let client = world.spawn(bundle).id();
+    let mut entity = world.entity_mut(client);
+    entity.get_mut::<EntityLayerId>().unwrap().0 = layer;
+    entity.get_mut::<VisibleChunkLayer>().unwrap().0 = layer;
+    entity
+        .get_mut::<VisibleEntityLayers>()
+        .unwrap()
+        .0
+        .insert(layer);
+    client
+}
+
 /// Creates a mock client bundle that can be used for unit testing.
 ///
 /// Returns the client, and a helper to inject packets as if the client sent
 /// them and receive packets as if the client received them.
-pub fn create_mock_client<N: Into<String>>(name: N) -> (ClientBundle, MockClientHelper) {
+pub fn create_mock_client<N: Into<String>>(name: N) -> (impl Bundle, MockClientHelper) {
     let conn = MockClientConnection::new();
 
-    let bundle = ClientBundle::new(ClientBundleArgs {
+    let bundle = ClientArgs {
         username: name.into(),
         uuid: Uuid::from_bytes(rand::random()),
         ip: IpAddr::V4(Ipv4Addr::LOCALHOST),
@@ -102,7 +120,8 @@ pub fn create_mock_client<N: Into<String>>(name: N) -> (ClientBundle, MockClient
         allow_server_listings: false,
         particle_mode: Default::default(),
         enc: PacketEncoder::new(),
-    });
+    }
+    .into_bundle();
 
     let helper = MockClientHelper::new(conn);
 

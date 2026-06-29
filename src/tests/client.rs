@@ -8,7 +8,7 @@ use crate::protocol::packets::play::{
     AcceptTeleportationC2s, MoveEntityPosS2c, MovePlayerPosRotC2s, PlayerPositionS2c,
     SetEntityDataS2c,
 };
-use crate::testing::{create_mock_client, ScenarioSingleClient};
+use crate::testing::{create_mock_client, spawn_client_in_layer, ScenarioSingleClient};
 use crate::{ChunkPos, GameMode};
 
 #[test]
@@ -28,13 +28,9 @@ fn client_teleport_and_move() {
         }
     }
 
-    let (mut bundle, mut helper_2) = create_mock_client("other");
+    let (bundle, mut helper_2) = create_mock_client("other");
 
-    bundle.layer.0 = layer_ent;
-    bundle.visible_chunk_layer.0 = layer_ent;
-    bundle.visible_entity_layers.0.insert(layer_ent);
-
-    app.world_mut().spawn(bundle);
+    spawn_client_in_layer(app.world_mut(), bundle, layer_ent);
 
     app.update();
 

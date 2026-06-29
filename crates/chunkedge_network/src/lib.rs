@@ -23,7 +23,7 @@ use chunkedge_protocol::packets::play::client_information_c2s::{
 };
 use chunkedge_protocol::text::IntoText;
 use chunkedge_protocol::VarInt;
-use chunkedge_server::client::{ClientBundle, ClientBundleArgs, Properties, SpawnClientsSet};
+use chunkedge_server::client::{ClientArgs, Properties, SpawnClientsSet};
 use chunkedge_server::registry::biome::{Biome, BiomeId};
 use chunkedge_server::registry::dimension_type::{DimensionType, DimensionTypeId};
 use chunkedge_server::registry::{BiomeRegistry, DimensionTypeRegistry, Registry, TagsRegistry};
@@ -150,7 +150,7 @@ fn build_plugin(app: &mut App) -> anyhow::Result<()> {
     let spawn_new_clients = move |world: &mut World| {
         for _ in 0..shared.0.new_clients_recv.len() {
             match shared.0.new_clients_recv.try_recv() {
-                Ok(args) => world.spawn(ClientBundle::new(args)),
+                Ok(args) => world.spawn(args.into_bundle()),
                 Err(_) => break,
             };
         }
@@ -203,9 +203,9 @@ struct SharedNetworkStateInner {
     // to store the runtime here so we don't drop it.
     _tokio_runtime: Option<Runtime>,
     /// Sender for new clients past the login stage.
-    new_clients_send: Sender<ClientBundleArgs>,
+    new_clients_send: Sender<ClientArgs>,
     /// Receiver for new clients past the login stage.
-    new_clients_recv: Receiver<ClientBundleArgs>,
+    new_clients_recv: Receiver<ClientArgs>,
     /// The RSA keypair used for encryption with clients.
     rsa_key: RsaPrivateKey,
     /// The public part of `rsa_key` encoded in DER, which is an ASN.1 format.
@@ -452,7 +452,7 @@ pub trait NetworkCallbacks: Send + Sync + 'static {
     ///   disconnected with `reason` as the displayed message.
     /// - Otherwise, `Ok(f)` is returned and the client will continue the login
     ///   process. This _may_ result in a new client being spawned with the
-    ///   [`ClientBundle`] components. `f` is stored along with the client and
+    ///   client components. `f` is stored along with the client and
     ///   is called when the client is disconnected.
     ///
     ///   `f` is a callback function used for handling resource cleanup when the

@@ -17,7 +17,7 @@ use chunkedge_entity::player::{Food, PlayerEntity, Saturation};
 use chunkedge_entity::query::EntityInitQuery;
 use chunkedge_entity::tracked_data::TrackedData;
 use chunkedge_entity::{
-    ClearEntityChangesSet, EntityId, EntityLayerId, EntityStatus, OldPosition, Position, Velocity,
+    ClearEntityChangesSet, EntityId, EntityStatus, OldPosition, Position, Velocity,
 };
 use chunkedge_math::{DVec3, Vec3};
 use chunkedge_protocol::encode::{PacketEncoder, WritePacket};
@@ -110,107 +110,39 @@ impl Plugin for ClientPlugin {
     }
 }
 
-/// The bundle of components needed for clients to function. All components are
-/// required unless otherwise stated.
-#[derive(Bundle)]
-pub struct ClientBundle {
-    pub marker: ClientMarker,
-    pub client: Client,
-    pub settings: crate::client_settings::ClientSettings,
-    pub entity_remove_buf: EntityRemoveBuf,
-    pub username: Username,
-    pub ip: Ip,
-    pub properties: Properties,
-    pub respawn_pos: crate::spawn::RespawnPosition,
-    pub op_level: crate::op_level::OpLevel,
-    pub action_sequence: crate::action::ActionSequence,
-    pub view_distance: ViewDistance,
-    pub old_view_distance: OldViewDistance,
-    pub visible_chunk_layer: VisibleChunkLayer,
-    pub old_visible_chunk_layer: OldVisibleChunkLayer,
-    pub visible_entity_layers: VisibleEntityLayers,
-    pub old_visible_entity_layers: OldVisibleEntityLayers,
-    pub keepalive_state: crate::keepalive::KeepaliveState,
-    pub ping: crate::keepalive::Ping,
-    pub teleport_state: crate::teleport::TeleportState,
-    pub game_mode: GameMode,
-    pub prev_game_mode: crate::spawn::PrevGameMode,
-    pub death_location: crate::spawn::DeathLocation,
-    pub is_hardcore: crate::spawn::IsHardcore,
-    pub hashed_seed: crate::spawn::HashedSeed,
-    pub reduced_debug_info: crate::spawn::ReducedDebugInfo,
-    pub has_respawn_screen: crate::spawn::HasRespawnScreen,
-    pub is_debug: crate::spawn::IsDebug,
-    pub is_flat: crate::spawn::IsFlat,
-    pub portal_cooldown: crate::spawn::PortalCooldown,
-    pub flying_speed: crate::abilities::FlyingSpeed,
-    pub fov_modifier: crate::abilities::FovModifier,
-    pub player_abilities_flags: crate::abilities::PlayerAbilitiesFlags,
-    pub player: PlayerEntity,
-    pub uuid: UniqueId,
-    pub layer: EntityLayerId,
-    pub player_model_parts: chunkedge_entity::player::PlayerModelParts,
-    pub main_arm: chunkedge_entity::player::MainArm,
-}
-
-impl ClientBundle {
-    pub fn new(args: ClientBundleArgs) -> Self {
-        Self {
-            marker: ClientMarker,
-            client: Client {
-                conn: args.conn,
-                enc: args.enc,
+impl ClientArgs {
+    /// Builds the bundle of components needed for a client to function. The
+    /// remaining client components are pulled in automatically as required
+    /// components of [`Client`].
+    pub fn into_bundle(self) -> impl Bundle {
+        (
+            ClientMarker,
+            Client {
+                conn: self.conn,
+                enc: self.enc,
             },
-            settings: crate::client_settings::ClientSettings {
-                locale: args.locale.into_boxed_str(),
-                chat_mode: args.chat_mode,
-                chat_colors: args.chat_colors,
-                enable_text_filtering: args.enable_text_filtering,
-                allow_server_listings: args.allow_server_listings,
-                particle_mode: args.particle_mode,
+            crate::client_settings::ClientSettings {
+                locale: self.locale.into_boxed_str(),
+                chat_mode: self.chat_mode,
+                chat_colors: self.chat_colors,
+                enable_text_filtering: self.enable_text_filtering,
+                allow_server_listings: self.allow_server_listings,
+                particle_mode: self.particle_mode,
             },
-            entity_remove_buf: Default::default(),
-            username: Username(args.username),
-            ip: Ip(args.ip),
-            properties: Properties(args.properties),
-            respawn_pos: Default::default(),
-            op_level: Default::default(),
-            action_sequence: Default::default(),
-            view_distance: ViewDistance(args.view_distance),
-            old_view_distance: OldViewDistance(2),
-            visible_chunk_layer: Default::default(),
-            old_visible_chunk_layer: OldVisibleChunkLayer(Entity::PLACEHOLDER),
-            visible_entity_layers: Default::default(),
-            old_visible_entity_layers: OldVisibleEntityLayers(BTreeSet::new()),
-            keepalive_state: crate::keepalive::KeepaliveState::new(),
-            ping: Default::default(),
-            teleport_state: crate::teleport::TeleportState::new(),
-            game_mode: GameMode::default(),
-            prev_game_mode: Default::default(),
-            death_location: Default::default(),
-            is_hardcore: Default::default(),
-            is_flat: Default::default(),
-            has_respawn_screen: Default::default(),
-            hashed_seed: Default::default(),
-            reduced_debug_info: Default::default(),
-            is_debug: Default::default(),
-            portal_cooldown: Default::default(),
-            flying_speed: Default::default(),
-            fov_modifier: Default::default(),
-            player_abilities_flags: Default::default(),
-            player: PlayerEntity,
-            uuid: UniqueId(args.uuid),
-            layer: Default::default(),
-            player_model_parts: chunkedge_entity::player::PlayerModelParts(u8::from(
-                args.displayed_skin_parts,
-            ) as i8),
-            main_arm: chunkedge_entity::player::MainArm(args.main_arm as i8),
-        }
+            Username(self.username),
+            Ip(self.ip),
+            Properties(self.properties),
+            ViewDistance(self.view_distance),
+            PlayerEntity,
+            UniqueId(self.uuid),
+            chunkedge_entity::player::PlayerModelParts(u8::from(self.displayed_skin_parts) as i8),
+            chunkedge_entity::player::MainArm(self.main_arm as i8),
+        )
     }
 }
 
-/// Arguments for [`ClientBundle::new`].
-pub struct ClientBundleArgs {
+/// Arguments for [`ClientArgs::into_bundle`].
+pub struct ClientArgs {
     /// The username for the client.
     pub username: String,
     /// UUID of the client.
@@ -247,6 +179,34 @@ pub struct ClientMarker;
 /// The component is removed when the client is disconnected. You are allowed to
 /// remove the component yourself.
 #[derive(Component)]
+#[require(
+    EntityRemoveBuf,
+    crate::spawn::RespawnPosition,
+    crate::op_level::OpLevel,
+    crate::action::ActionSequence,
+    OldViewDistance = OldViewDistance(2),
+    VisibleChunkLayer,
+    OldVisibleChunkLayer = OldVisibleChunkLayer(Entity::PLACEHOLDER),
+    VisibleEntityLayers,
+    OldVisibleEntityLayers,
+    crate::keepalive::KeepaliveState = crate::keepalive::KeepaliveState::new(),
+    crate::keepalive::Ping,
+    crate::teleport::TeleportState = crate::teleport::TeleportState::new(),
+    GameMode,
+    crate::spawn::PrevGameMode,
+    crate::spawn::DeathLocation,
+    crate::spawn::IsHardcore,
+    crate::spawn::HashedSeed,
+    crate::spawn::ReducedDebugInfo,
+    crate::spawn::HasRespawnScreen,
+    crate::spawn::IsDebug,
+    crate::spawn::IsFlat,
+    crate::spawn::PortalCooldown,
+    crate::abilities::FlyingSpeed,
+    crate::abilities::FovModifier,
+    crate::abilities::PlayerAbilitiesFlags,
+    PlayerEntity,
+)]
 pub struct Client {
     conn: Box<dyn ClientConnection>,
     pub(crate) enc: PacketEncoder,

@@ -7,7 +7,7 @@ use anyhow::bail;
 use bytes::BytesMut;
 use chunkedge_binary::{Decode, Encode};
 use chunkedge_protocol::{CompressionThreshold, Packet};
-use chunkedge_server::client::{ClientBundleArgs, ClientConnection, ReceivedPacket};
+use chunkedge_server::client::{ClientArgs, ClientConnection, ReceivedPacket};
 use chunkedge_server::protocol::decode::PacketFrame;
 use chunkedge_server::protocol::{PacketDecoder, PacketEncoder};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -112,7 +112,7 @@ impl PacketIo {
         incoming_byte_limit: usize,
         outgoing_byte_limit: usize,
         cleanup: CleanupOnDrop,
-    ) -> ClientBundleArgs {
+    ) -> ClientArgs {
         let (incoming_sender, incoming_receiver) = flume::unbounded();
 
         let incoming_byte_limit = incoming_byte_limit.min(Semaphore::MAX_PERMITS);
@@ -207,7 +207,7 @@ impl PacketIo {
             }
         });
 
-        ClientBundleArgs {
+        ClientArgs {
             username: info.username,
             uuid: info.uuid,
             ip: info.ip,
