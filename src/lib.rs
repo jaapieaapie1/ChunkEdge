@@ -72,6 +72,7 @@ use chunkedge_server::action::ActionPlugin;
 use chunkedge_server::client::ClientPlugin;
 use chunkedge_server::client_command::ClientCommandPlugin;
 use chunkedge_server::client_settings::ClientSettingsPlugin;
+use chunkedge_server::cookie::CookiePlugin;
 use chunkedge_server::custom_payload::CustomPayloadPlugin;
 use chunkedge_server::entity::hitbox::HitboxPlugin;
 use chunkedge_server::entity::EntityPlugin;
@@ -146,6 +147,7 @@ pub mod prelude {
         JumpWithHorseMessage, JumpWithHorseState, LeaveBedMessage, PlayerCommand, SneakMessage,
         SneakState, SprintMessage, SprintState,
     };
+    pub use chunkedge_server::cookie::CookieResponseMessage;
     pub use chunkedge_server::entity::hitbox::{Hitbox, HitboxShape};
     pub use chunkedge_server::entity::{
         EntityAnimation, EntityKind, EntityLayerId, EntityManager, EntityStatus, HeadYaw, Look,
@@ -211,6 +213,7 @@ impl PluginGroup for DefaultPlugins {
             .add(TeleportPlugin)
             .add(MessagePlugin)
             .add(CustomPayloadPlugin)
+            .add(CookiePlugin)
             .add(HandSwingPlugin)
             .add(InteractBlockPlugin)
             .add(InteractItemPlugin)

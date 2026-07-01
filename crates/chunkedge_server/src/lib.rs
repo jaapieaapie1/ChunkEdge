@@ -7,6 +7,7 @@ mod chunk_view;
 pub mod client;
 pub mod client_command;
 pub mod client_settings;
+pub mod cookie;
 pub mod custom_payload;
 pub mod event_loop;
 pub mod hand_swing;

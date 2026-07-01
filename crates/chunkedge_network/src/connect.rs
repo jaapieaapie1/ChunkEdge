@@ -11,9 +11,9 @@ use chunkedge_binary::{Bounded, Decode, RawBytes};
 use chunkedge_lang::keys;
 use chunkedge_protocol::packets::configuration::select_known_packs_s2c::KnownPack;
 use chunkedge_protocol::packets::configuration::{
-    ClientInformationC2s, CustomPayloadC2s, CustomPayloadS2c, FinishConfigurationC2s,
-    FinishConfigurationS2c, RegistryDataS2c, SelectKnownPacksC2s, SelectKnownPacksS2c,
-    UpdateEnabledFeaturesS2c, UpdateTagsS2c,
+    ClientInformationC2s, CustomPayloadC2s, CustomPayloadS2c, DisconnectS2c as ConfigDisconnectS2c,
+    FinishConfigurationC2s, FinishConfigurationS2c, RegistryDataS2c, SelectKnownPacksC2s,
+    SelectKnownPacksS2c, UpdateEnabledFeaturesS2c, UpdateTagsS2c,
 };
 use chunkedge_protocol::packets::login::{LoginAcknowledgedC2s, LoginFinishedS2c};
 use chunkedge_protocol::packets::status::{
@@ -49,8 +49,8 @@ use uuid::Uuid;
 use crate::legacy_ping::try_handle_legacy_ping;
 use crate::packet_io::PacketIo;
 use crate::{
-    CleanupOnDrop, ConnectionMode, NewClientInfo, ServerListPing, SharedNetworkState,
-    WorldLoginState,
+    CleanupOnDrop, Configuration, ConnectionMode, Cookies, Login, NewClientInfo, ServerListPing,
+    SharedNetworkState, WorldLoginState,
 };
 
 const VELOCITY_MIN_MAX_SUPPORTED_VERSION: u8 = 3;
@@ -330,6 +330,28 @@ async fn handle_login(
         }
     };
 
+    // Give the user a chance to read client-side cookies (e.g. a session token
+    // set by another server before a transfer) while we are still in the Login
+    // phase. The inbound buffer is drained here, so a cookie request/response
+    // round-trip cannot collide with another packet.
+    let login_cookies_result = {
+        let mut cookies = Cookies::<Login>::new(&mut *io);
+        shared
+            .0
+            .callbacks
+            .inner
+            .login_cookies(shared, &mut cookies, &info)
+            .await
+    };
+    if let Err(reason) = login_cookies_result {
+        info!("disconnect during login_cookies: \"{reason}\"");
+        io.send_packet(&LoginDisconnectS2c {
+            reason: Cow::Owned(JsonText(reason)),
+        })
+        .await?;
+        return Ok(None);
+    }
+
     io.send_packet(&LoginFinishedS2c {
         uuid: info.uuid,
         username: info.username.as_str().into(),
@@ -352,6 +374,28 @@ async fn handle_login(
     info.enable_text_filtering = client_info.enable_text_filtering;
     info.allow_server_listings = client_info.allow_server_listings;
     info.particle_mode = client_info.particle_mode;
+
+    // The client's brand and settings are now known, and the inbound buffer is
+    // drained, but the registries have not been sent yet. This is the only
+    // collision-free window for a cookie request/response round-trip, so it is
+    // where users get read/write access to cookies during configuration.
+    let configure_result = {
+        let mut cookies = Cookies::<Configuration>::new(&mut *io);
+        shared
+            .0
+            .callbacks
+            .inner
+            .configure(shared, &mut cookies, &info)
+            .await
+    };
+    if let Err(reason) = configure_result {
+        info!("disconnect during configure: \"{reason}\"");
+        io.send_packet(&ConfigDisconnectS2c {
+            reason: Cow::Owned(reason.into()),
+        })
+        .await?;
+        return Ok(None);
+    }
 
     io.send_packet(&CustomPayloadS2c {
         channel: Ident::new("minecraft:brand").unwrap(),

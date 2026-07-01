@@ -2,8 +2,11 @@
 
 mod byte_channel;
 mod connect;
+mod cookies;
 mod legacy_ping;
 mod packet_io;
+
+pub use cookies::{Configuration, CookiePhase, Cookies, Login, MAX_COOKIE_SIZE};
 
 use std::borrow::Cow;
 use std::collections::BTreeMap;
@@ -495,6 +498,54 @@ pub trait NetworkCallbacks: Send + Sync + 'static {
             // TODO: use correct translation key.
             Err("Server Full".into_text())
         }
+    }
+
+    /// Called during the **Login** phase, after the client has authenticated
+    /// but before the configuration phase begins. This is the place to *read*
+    /// client-side cookies (see [`Cookies`]) — for example to restore a
+    /// session token set by another server before a transfer. The login phase
+    /// has no way to *store* cookies, so [`Cookies<Login>`] is read-only.
+    ///
+    /// This method runs from within a tokio runtime with no [`World`] access,
+    /// and is an appropriate place for asynchronous work such as database
+    /// lookups keyed off a cookie's value.
+    ///
+    /// Returning `Err(reason)` disconnects the client with `reason`.
+    ///
+    /// # Default Implementation
+    ///
+    /// Does nothing and returns `Ok(())`.
+    async fn login_cookies(
+        &self,
+        shared: &SharedNetworkState,
+        cookies: &mut Cookies<'_, Login>,
+        info: &NewClientInfo,
+    ) -> Result<(), Text> {
+        let _ = (shared, cookies, info);
+        Ok(())
+    }
+
+    /// Called during the **Configuration** phase, after the client's brand and
+    /// settings have been received but before the registries are sent. This is
+    /// the place to read *and* write client-side cookies (see [`Cookies`]).
+    ///
+    /// This method runs from within a tokio runtime with no [`World`] access,
+    /// and is an appropriate place for asynchronous work such as database
+    /// lookups keyed off a cookie's value.
+    ///
+    /// Returning `Err(reason)` disconnects the client with `reason`.
+    ///
+    /// # Default Implementation
+    ///
+    /// Does nothing and returns `Ok(())`.
+    async fn configure(
+        &self,
+        shared: &SharedNetworkState,
+        cookies: &mut Cookies<'_, Configuration>,
+        info: &NewClientInfo,
+    ) -> Result<(), Text> {
+        let _ = (shared, cookies, info);
+        Ok(())
     }
 
     /// Called upon every client login to obtain the full URL to use for session
